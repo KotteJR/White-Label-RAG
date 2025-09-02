@@ -199,7 +199,7 @@ function ChatPageContent() {
           style={{ minHeight: `calc(100% - ${composerH}px)` }}
         >
           <div className="flex flex-col items-center text-center animate-fadeIn w-full">
-            <div className="mb-3 text-2xl font-medium">What's on the agenda today?</div>
+            <div className="mb-3 text-2xl font-medium">What&apos;s on the agenda today?</div>
             <div className="text-sm text-gray-500">Ask anything to get started</div>
 
             {/* Inline composer when user starts typing */}

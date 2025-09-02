@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
-import { useUiStore } from "@/store/uiStore";
+
 import { usePathname } from "next/navigation";
 import classNames from "classnames";
-import { useEffect, useState } from "react";
-
 const NavItem = ({ href, label }: { href: string; label: string }) => {
   const pathname = usePathname();
   const active = pathname === href;
@@ -24,15 +22,12 @@ const NavItem = ({ href, label }: { href: string; label: string }) => {
 };
 
 export default function Sidebar() {
-  const { role, isAuthenticated, loginAs, logout } = useAuthStore();
-  const { sidebarOpen } = useUiStore();
-  const pathname = usePathname();
+  const { role, isAuthenticated, logout } = useAuthStore();
 
   const adminLinks = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/documents", label: "Documents" },
   ];
-  const sharedLinks = [{ href: "/chat", label: "Chat" }];
 
   return (
     <aside className={classNames("h-screen border-r border-gray-200 p-4 hidden sm:block w-64 bg-white")}> 

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
-import Link from "next/link";
+
 
 export default function LoginPage() {
   const login = useAuthStore((s) => s.login);
@@ -100,7 +100,7 @@ export default function LoginPage() {
 
             {/* Admin note */}
             <div className="mt-6 text-xs text-gray-500 text-center bg-gray-50 py-2 px-3 rounded-lg">
-              Admin test: username "admin", password "admin"
+              Admin test: username &quot;admin&quot;, password &quot;admin&quot;
             </div>
           </div>
         </div>

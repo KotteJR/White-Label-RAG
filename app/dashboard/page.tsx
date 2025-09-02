@@ -82,10 +82,9 @@ function DashboardPageContent() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Overview</h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Stat title="Documents" value={summary?.documents ?? 0} />
         <Stat title="Active chats" value={summary?.activeChats ?? 0} />
-        <Stat title="System status" value={summary?.systemStatus ?? "ok"} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabaseServer";
+import { getServerSupabase } from "@/lib/supabaseServer";
 import { cookies } from "next/headers";
 
 // DELETE /api/chats/[id]
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const cookieStore = await cookies();
@@ -13,7 +13,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const supabase = createClient();
+    const supabase = getServerSupabase();
+    if (!supabase) {
+      return NextResponse.json({ error: "Database not available" }, { status: 500 });
+    }
 
     // Delete all messages for this chat first (FK constraint)
     await supabase.from("messages").delete().eq("chat_id", id);
@@ -37,7 +40,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 }
 
 // PATCH /api/chats/[id]
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const cookieStore = await cookies();
@@ -50,7 +53,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const body = await request.json();
     const { title } = body;
 
-    const supabase = createClient();
+    const supabase = getServerSupabase();
+    if (!supabase) {
+      return NextResponse.json({ error: "Database not available" }, { status: 500 });
+    }
 
     const { data, error } = await supabase
       .from("chats")

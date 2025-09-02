@@ -2,13 +2,12 @@
 
 import { useAuthStore } from "@/store/authStore";
 import { useUiStore } from "@/store/uiStore";
-import { useState } from "react";
+
 import Link from "next/link";
 
 export default function ProfilePage() {
-  const { isAuthenticated, email, role, loginAs, logout } = useAuthStore();
+  const { isAuthenticated, email, role, logout } = useAuthStore();
   const { theme, setTheme } = useUiStore();
-  const [newEmail, setNewEmail] = useState(email ?? "");
 
   return (
     <div className="space-y-6">

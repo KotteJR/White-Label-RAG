@@ -23,7 +23,7 @@ function DocumentsPageContent() {
   const [editing, setEditing] = useState<DocumentItem | null>(null);
   const [metaTitle, setMetaTitle] = useState("");
   const [metaTags, setMetaTags] = useState("");
-  const [viewingJson, setViewingJson] = useState<any>(null);
+  const [viewingJson, setViewingJson] = useState<object | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

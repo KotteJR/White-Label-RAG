@@ -18,9 +18,9 @@ async function getKnowledgeBase(query: string): Promise<KBSource[]> {
   
   const queryTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2);
   
-  const scored = data.map((row: any) => {
+  const scored = data.map((row: { id: string; filename: string; content_json?: { sections?: { heading?: string; body?: string }[] } }) => {
     const title: string = row.filename || "Untitled";
-    const sections: any[] = (row.content_json?.sections as any[]) || [];
+    const sections = row.content_json?.sections || [];
     const body = sections.map((s) => `${s.heading || ""}\n${s.body || ""}`).join("\n\n");
     
     // More sophisticated scoring

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { addMessage, listMessages } from "@/lib/chatStore";
 import { getServerSupabase } from "@/lib/supabaseServer";
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = getServerSupabase();
   if (supabase) {
@@ -17,7 +17,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   return Response.json({ items: listMessages(id) });
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
   const { sender, content } = body as { sender: "user" | "assistant"; content: string };

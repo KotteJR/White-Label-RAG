@@ -88,7 +88,7 @@ export default function ChatDetailPage() {
       } catch {}
       const res = await fetch(`/api/chats/${chatId}/messages`);
       const data = await res.json();
-      const mapped: Message[] = (data.items || []).map((m: any) => ({ id: m.id, role: m.sender, content: m.content }));
+      const mapped: Message[] = (data.items || []).map((m: { id: string; sender: "user" | "assistant"; content: string }) => ({ id: m.id, role: m.sender, content: m.content }));
       setMessages(mapped);
       if (mapped.length > 0) setHasStarted(true);
     }
