@@ -6,24 +6,56 @@ type KBSource = { id: string; title: string; snippet: string };
 async function getKnowledgeBase(query: string): Promise<KBSource[]> {
   const supabase = getServerSupabase();
   if (!supabase) return [];
-  // Very simple retrieval: last 10 documents; prefer those whose title includes a query term
+  
+  // Get all documents (could be enhanced with vector search in the future)
   const { data } = await supabase
     .from("documents")
     .select("id, filename, content_json, created_at")
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(20); // Increased limit for better coverage
+    
   if (!data) return [];
-  const q = query.toLowerCase();
+  
+  const queryTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 2);
+  
   const scored = data.map((row: any) => {
     const title: string = row.filename || "Untitled";
     const sections: any[] = (row.content_json?.sections as any[]) || [];
-    const body = sections.map((s) => `${s.heading || ""}\n${s.body || ""}`).join("\n\n").slice(0, 2000);
-    const score = title.toLowerCase().includes(q) ? 2 : body.toLowerCase().includes(q) ? 1 : 0;
-    return { id: row.id as string, title, snippet: body, score } as KBSource & { score: number };
+    const body = sections.map((s) => `${s.heading || ""}\n${s.body || ""}`).join("\n\n");
+    
+    // More sophisticated scoring
+    let score = 0;
+    const titleLower = title.toLowerCase();
+    const bodyLower = body.toLowerCase();
+    
+    // Title matches are worth more
+    queryTerms.forEach(term => {
+      if (titleLower.includes(term)) score += 3;
+      if (bodyLower.includes(term)) score += 1;
+      
+      // Bonus for exact phrases
+      if (bodyLower.includes(query.toLowerCase())) score += 2;
+    });
+    
+    // Create snippet with context around matches
+    let snippet = body.slice(0, 3000); // Increased snippet size
+    
+    // Try to find the most relevant section
+    for (const section of sections) {
+      const sectionText = `${section.heading || ""}\n${section.body || ""}`;
+      if (queryTerms.some(term => sectionText.toLowerCase().includes(term))) {
+        snippet = sectionText.slice(0, 2000);
+        break;
+      }
+    }
+    
+    return { id: row.id as string, title, snippet, score } as KBSource & { score: number };
   });
+  
+  // Return top scoring documents, but include some even if score is 0 (for general context)
   return scored
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
+    .slice(0, 8) // Increased to 8 documents
     .map(({ id, title, snippet }) => ({ id, title, snippet }));
 }
 

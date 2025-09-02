@@ -91,21 +91,91 @@ export default function ChatDetailPage() {
       const mapped: Message[] = (data.items || []).map((m: any) => ({ id: m.id, role: m.sender, content: m.content }));
       setMessages(mapped);
       if (mapped.length > 0) setHasStarted(true);
-
-      // Check for seed param and auto-send first message
-      const seedMessage = searchParams.get('seed');
-      if (seedMessage && mapped.length === 0) {
-        setInput(seedMessage);
-        // Auto-send after a short delay to allow UI to settle
-        setTimeout(() => {
-          if (seedMessage.trim()) {
-            sendMessage(seedMessage);
-          }
-        }, 100);
-      }
     }
     load();
-  }, [chatId, searchParams]);
+  }, [chatId]);
+
+  // Handle seed message separately to avoid double sends
+  useEffect(() => {
+    const seedMessage = searchParams.get('seed');
+    if (seedMessage && messages.length === 0 && !hasStarted && !isSending) {
+      // Auto-send the seeded message
+      const sendSeedMessage = async () => {
+        setInput("");
+        setIsSending(true);
+
+        // Persist user message
+        await fetch(`/api/chats/${chatId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sender: "user", content: seedMessage }),
+        });
+        const userMessage: Message = { id: crypto.randomUUID(), role: "user", content: seedMessage };
+        setMessages([userMessage]);
+
+        // Start assistant placeholder and get OpenAI response
+        const assistantId = crypto.randomUUID();
+        setMessages((arr) => [...arr, { id: assistantId, role: "assistant", content: "" }]);
+        setIsStreaming(true);
+        
+        try {
+          // Call the OpenAI RAG API
+          const response = await fetch("/api/chat/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: seedMessage }),
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          const assistantContent = result.content || "I apologize, but I couldn't generate a response.";
+          
+          // Simulate typing effect for better UX
+          for (let i = 0; i <= assistantContent.length; i += Math.max(1, Math.floor(assistantContent.length / 50))) {
+            await new Promise((r) => setTimeout(r, 30));
+            const partialContent = assistantContent.slice(0, i);
+            setMessages((arr) => arr.map((m) => (m.id === assistantId ? { ...m, content: partialContent } : m)));
+          }
+          
+          // Ensure we show the full content
+          setMessages((arr) => arr.map((m) => (m.id === assistantId ? { ...m, content: assistantContent } : m)));
+          
+          // Persist assistant message
+          await fetch(`/api/chats/${chatId}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sender: "assistant", content: assistantContent }),
+          });
+          
+        } catch (error) {
+          console.error("Chat error:", error);
+          const errorMessage = "I'm sorry, but I encountered an error while processing your request. Please try again.";
+          setMessages((arr) => arr.map((m) => (m.id === assistantId ? { ...m, content: errorMessage } : m)));
+          
+          // Persist error message
+          await fetch(`/api/chats/${chatId}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sender: "assistant", content: errorMessage }),
+          });
+        } finally {
+          setIsStreaming(false);
+          setIsSending(false);
+          setHasStarted(true);
+          
+          // Clear the seed param from URL to prevent re-runs
+          const url = new URL(window.location.href);
+          url.searchParams.delete('seed');
+          window.history.replaceState({}, '', url.toString());
+        }
+      };
+
+      sendSeedMessage();
+    }
+  }, [chatId, searchParams, messages.length, hasStarted, isSending]);
 
   const sendMessage = async (messageContent?: string) => {
     const content = messageContent || input;
