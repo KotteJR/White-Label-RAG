@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
-import Sidebar from "@/components/Sidebar";
-import Topbar from "@/components/Topbar";
+import AppShell from "@/components/AppShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,17 +26,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers>
-          <div className="grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] min-h-screen">
-            <div className="row-span-2"><Sidebar /></div>
-            <div className="col-start-2 row-start-1"><Topbar /></div>
-            <main className="col-start-2 row-start-2 p-4">{children}</main>
-          </div>
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>
   );
 }
+
+// AppShell moved to client component in components/AppShell.tsx

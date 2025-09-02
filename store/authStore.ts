@@ -25,21 +25,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: false,
   error: null,
   hydrate: () => {
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      const mock = getMockUser();
-      if (mock) set({ isAuthenticated: true, email: mock.email, role: mock.role });
-      return;
-    }
     set({ loading: true });
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (error || !data.user) {
-        set({ isAuthenticated: false, email: null, role: null, loading: false, error: error?.message || null });
-        return;
-      }
-      const role = (data.user.app_metadata?.role as UserRole) || "user";
-      set({ isAuthenticated: true, email: data.user.email ?? null, role, loading: false, error: null });
-    });
+    fetch("/api/auth")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.isAuthenticated) {
+          set({ isAuthenticated: true, email: data.email, role: data.role, loading: false, error: null });
+        } else {
+          set({ isAuthenticated: false, email: null, role: null, loading: false });
+        }
+      })
+      .catch((e) => set({ isAuthenticated: false, email: null, role: null, loading: false, error: (e as Error).message }));
   },
   loginAs: async (role, email) => {
     const supabase = getSupabaseClient();
@@ -81,6 +77,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "logout" }) });
     } finally {
       set({ isAuthenticated: false, email: null, role: null });
+      // Redirect to login page after logout
+      window.location.href = "/login";
     }
   },
 }));

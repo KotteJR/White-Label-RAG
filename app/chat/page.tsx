@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import classNames from "classnames";
 import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
+import AuthGuard from "@/components/AuthGuard";
 
 type Message = {
   id: string;
@@ -12,7 +13,7 @@ type Message = {
   feedback?: "up" | "down";
 };
 
-export default function ChatPage() {
+function ChatPageContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -282,6 +283,14 @@ export default function ChatPage() {
         </form>
       )}
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <AuthGuard>
+      <ChatPageContent />
+    </AuthGuard>
   );
 }
 

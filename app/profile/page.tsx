@@ -3,7 +3,7 @@
 import { useAuthStore } from "@/store/authStore";
 import { useUiStore } from "@/store/uiStore";
 import { useState } from "react";
-import Button from "@mui/material/Button";
+import Link from "next/link";
 
 export default function ProfilePage() {
   const { isAuthenticated, email, role, loginAs, logout } = useAuthStore();
@@ -20,23 +20,11 @@ export default function ProfilePage() {
         <div className="space-x-2">
           {!isAuthenticated ? (
             <>
-              <Button variant="contained" color="primary" size="small" onClick={() => loginAs("user", newEmail || undefined)}>
-                Login as User
-              </Button>
-              <Button variant="contained" color="primary" size="small" onClick={() => loginAs("admin", newEmail || undefined)}>
-                Login as Admin
-              </Button>
-              <input
-                placeholder="email@example.com"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                className="ml-2 rounded border border-gray-300 bg-transparent px-2 py-1 text-sm"
-              />
+              <Link href="/login" className="rounded-md bg-gray-900 px-3 py-1 text-sm text-white hover:bg-gray-700">Login</Link>
+              <Link href="/signup" className="rounded-md border px-3 py-1 text-sm hover:bg-gray-50">Sign up</Link>
             </>
           ) : (
-            <Button variant="outlined" color="primary" size="small" onClick={() => logout()}>
-              Logout
-            </Button>
+            <button className="rounded-md border px-3 py-1 text-sm hover:bg-gray-50" onClick={() => logout()}>Logout</button>
           )}
         </div>
       </div>

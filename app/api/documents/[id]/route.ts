@@ -19,6 +19,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
         status: "Embedded" as const,
         uploadedAt: data.created_at,
         tags: (data.content_json?.metadata?.tags as string[]) || [],
+        content_json: data.content_json || null,
       });
     }
   }

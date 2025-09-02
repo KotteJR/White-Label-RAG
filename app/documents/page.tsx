@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import AuthGuard from "@/components/AuthGuard";
 
 type DocumentItem = {
   id: string;
@@ -11,7 +12,7 @@ type DocumentItem = {
   tags?: string[];
 };
 
-export default function DocumentsPage() {
+function DocumentsPageContent() {
   const [items, setItems] = useState<DocumentItem[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -22,6 +23,7 @@ export default function DocumentsPage() {
   const [editing, setEditing] = useState<DocumentItem | null>(null);
   const [metaTitle, setMetaTitle] = useState("");
   const [metaTags, setMetaTags] = useState("");
+  const [viewingJson, setViewingJson] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -66,6 +68,16 @@ export default function DocumentsPage() {
     setEditing(doc);
     setMetaTitle(doc.title);
     setMetaTags((doc.tags || []).join(", "));
+  };
+
+  const viewJson = async (doc: DocumentItem) => {
+    try {
+      const response = await fetch(`/api/documents/${doc.id}`);
+      const data = await response.json();
+      setViewingJson(data.content_json || data.json_content || { error: "No JSON content found" });
+    } catch (error) {
+      setViewingJson({ error: "Failed to load JSON content", details: String(error) });
+    }
   };
 
   const saveMeta = async () => {
@@ -153,8 +165,8 @@ export default function DocumentsPage() {
                 </td>
                 <td className="py-3 text-gray-600">{new Date(d.uploadedAt).toLocaleString()}</td>
                 <td className="py-3 pr-1 text-right space-x-2">
+                  <button className="rounded-md px-2 py-1 text-blue-600 hover:bg-blue-50" onClick={() => viewJson(d)}>View JSON</button>
                   <button className="rounded-md px-2 py-1 text-gray-700 hover:bg-gray-50" onClick={() => openEdit(d)}>Edit</button>
-                  <button className="rounded-md px-2 py-1 text-gray-700 hover:bg-gray-50" onClick={() => alert("Reupload not implemented in mock")}>Reupload</button>
                   <button
                     className="rounded-md px-2 py-1 text-rose-600 hover:bg-rose-50"
                     onClick={async () => {
@@ -189,6 +201,29 @@ export default function DocumentsPage() {
         </button>
       </div>
 
+      {/* JSON Viewer Modal */}
+      {viewingJson && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-4xl max-h-[90vh] rounded-lg bg-white border border-gray-200 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold">Document JSON Content</h2>
+              <button 
+                onClick={() => setViewingJson(null)}
+                className="rounded-md px-3 py-1 text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
+              <pre className="bg-gray-50 p-4 rounded-lg text-sm overflow-auto whitespace-pre-wrap">
+                {JSON.stringify(viewingJson, null, 2)}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Metadata Modal */}
       {editing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-4 border border-gray-200 shadow-sm">
@@ -211,6 +246,14 @@ export default function DocumentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DocumentsPage() {
+  return (
+    <AuthGuard requireRole="admin">
+      <DocumentsPageContent />
+    </AuthGuard>
   );
 }
 

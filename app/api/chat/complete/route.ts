@@ -43,7 +43,10 @@ export async function POST(req: Request) {
   }
 
   const openai = new OpenAI({ apiKey });
-  const system = `You are a helpful assistant. You are given optional knowledge base snippets. Use them to answer concisely. If unsure, say so.
+  const system = `You are a helpful assistant that ONLY answers questions based on the provided knowledge base documents. If the knowledge base is empty or doesn't contain relevant information, say "I don't have any documents uploaded that can answer this question. Please upload relevant documents first."
+
+IMPORTANT: Only use information from the knowledge base provided below. Do not use your general knowledge.
+
 Return a JSON object with shape {"content": string, "citations": [{"id": string, "title": string}]}. Only include citations that informed your answer.`;
   const kbText = sources
     .map((s, i) => `[#${i + 1}] (${s.id}) ${s.title}\n${s.snippet}`)

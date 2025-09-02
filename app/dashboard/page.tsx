@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Line } from "react-chartjs-2";
+import AuthGuard from "@/components/AuthGuard";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -25,7 +26,7 @@ type Summary = {
 
 type RecentItem = { id: string; name: string; date: string };
 
-export default function DashboardPage() {
+function DashboardPageContent() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [recentDocs, setRecentDocs] = useState<RecentItem[]>([]);
   const [recentChats, setRecentChats] = useState<RecentItem[]>([]);
@@ -133,6 +134,14 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
       <div className="mb-2 text-sm font-medium text-gray-700">{title}</div>
       {children}
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <AuthGuard requireRole="admin">
+      <DashboardPageContent />
+    </AuthGuard>
   );
 }
 

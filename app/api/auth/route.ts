@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 type UserRecord = { id: string; email: string; username: string; role: "admin" | "user"; password: string };
 const memoryDb: { users: UserRecord[] } = { users: [{ id: "1", email: "admin@example.com", username: "admin", role: "admin", password: "admin" }] };
 
-function setSessionCookie(user: UserRecord | null) {
-  const store = cookies();
+async function setSessionCookie(user: UserRecord | null) {
+  const store = await cookies();
   if (!user) {
     store.set("authenticated", "", { path: "/", maxAge: 0 });
     store.set("role", "", { path: "/", maxAge: 0 });
@@ -20,14 +20,14 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { action } = body as { action: "login" | "logout" | "signup" };
   if (action === "logout") {
-    setSessionCookie(null);
+    await setSessionCookie(null);
     return Response.json({ ok: true });
   }
   if (action === "login") {
     const { username, password } = body as { username: string; password: string };
     const user = memoryDb.users.find((u) => u.username === username && u.password === password);
     if (!user) return new Response("Invalid credentials", { status: 401 });
-    setSessionCookie(user);
+    await setSessionCookie(user);
     return Response.json({ id: user.id, email: user.email, role: user.role, username: user.username });
   }
   if (action === "signup") {
@@ -38,14 +38,14 @@ export async function POST(request: Request) {
     }
     const user: UserRecord = { id: crypto.randomUUID(), email, username, role: "user", password };
     memoryDb.users.push(user);
-    setSessionCookie(user);
+    await setSessionCookie(user);
     return Response.json({ id: user.id, email: user.email, role: user.role, username: user.username });
   }
   return new Response("Bad request", { status: 400 });
 }
 
 export async function GET() {
-  const store = cookies();
+  const store = await cookies();
   const authenticated = store.get("authenticated")?.value === "true";
   const role = (store.get("role")?.value as "admin" | "user" | undefined) || null;
   const email = store.get("email")?.value ? decodeURIComponent(store.get("email")!.value) : null;
