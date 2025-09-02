@@ -5,6 +5,8 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import classNames from "classnames";
 import { PaperAirplaneIcon, PlusIcon, EllipsisVerticalIcon } from "@heroicons/react/24/solid";
 import { Menu } from "@headlessui/react";
+import ReactMarkdown from "react-markdown";
+import ChatVisualization from "@/components/ChatVisualization";
 
 type Message = {
   id: string;
@@ -28,6 +30,32 @@ export default function ChatDetailPage() {
   const [atBottom, setAtBottom] = useState(true);
   const [composerH, setComposerH] = useState(0);
   const [taHeight, setTaHeight] = useState<number>(48);
+
+  // Function to extract chart data from markdown code blocks
+  function extractChartData(content: string) {
+    const chartRegex = /```chart\s*\n([\s\S]*?)\n```/g;
+    const charts: { type: "bar" | "line" | "pie" | "area"; title?: string; data: Record<string, unknown>[]; xKey?: string; yKey?: string }[] = [];
+    let match;
+    
+    while ((match = chartRegex.exec(content)) !== null) {
+      try {
+        const chartData = JSON.parse(match[1]);
+        // Validate chart type
+        if (chartData.type && ["bar", "line", "pie", "area"].includes(chartData.type)) {
+          charts.push(chartData);
+        }
+      } catch (e) {
+        console.error("Failed to parse chart data:", e);
+      }
+    }
+    
+    return charts;
+  }
+
+  // Function to remove chart blocks from content
+  function removeChartBlocks(content: string) {
+    return content.replace(/```chart\s*\n[\s\S]*?\n```/g, '');
+  }
 
   function adjustTextarea(el: HTMLTextAreaElement) {
     const CONTROL_H = 48;
@@ -276,7 +304,7 @@ export default function ChatDetailPage() {
   };
 
   return (
-    <div className="relative grid h-[calc(100vh-80px)] grid-cols-[260px_1fr] bg-white text-gray-900">
+    <div className="fixed inset-0 top-20 grid grid-cols-[260px_1fr] bg-white text-gray-900">
       {/* History rail */}
       <aside className="border-r border-gray-200 p-3 overflow-y-auto">
         <div className="mb-3 flex items-center justify-between">
@@ -357,7 +385,7 @@ export default function ChatDetailPage() {
       </aside>
       
       {/* Main chat area - right column */}
-      <div className="relative flex flex-col">
+      <div className="relative flex flex-col h-full">
         <div
           ref={containerRef}
           className={classNames(
@@ -366,7 +394,7 @@ export default function ChatDetailPage() {
           )}
         >
           <div
-            className={classNames("mx-auto w-full max-w-3xl px-4", hasStarted ? "pt-4 pb-28" : "grid place-items-center")}
+            className={classNames("mx-auto w-full max-w-3xl px-4", hasStarted ? "pt-4 pb-4" : "grid place-items-center")}
             style={hasStarted ? undefined : { minHeight: `calc(100% - ${composerH}px)` }}
           >
             {!hasStarted ? (
@@ -433,9 +461,34 @@ export default function ChatDetailPage() {
                         <div className="max-w-[70%] rounded-3xl bg-gray-900 px-4 py-2 text-white shadow-sm transition-shadow hover:shadow-md">
                           {m.content}
                         </div>
-                      ) : (
-                        <div className="max-w-[70%] leading-relaxed text-gray-800 animate-fadeIn">{m.content}</div>
-                      )}
+                                          ) : (
+                      <div className="max-w-[70%] leading-relaxed text-gray-800 animate-fadeIn prose prose-sm max-w-none">
+                        <ReactMarkdown
+                          components={{
+                            h1: ({...props}) => <h1 className="text-xl font-bold mt-4 mb-2" {...props} />,
+                            h2: ({...props}) => <h2 className="text-lg font-bold mt-3 mb-2" {...props} />,
+                            h3: ({...props}) => <h3 className="text-base font-bold mt-2 mb-1" {...props} />,
+                            strong: ({...props}) => <strong className="font-bold text-gray-900" {...props} />,
+                            table: ({...props}) => <table className="min-w-full border-collapse border border-gray-300 my-3" {...props} />,
+                            th: ({...props}) => <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left font-semibold" {...props} />,
+                            td: ({...props}) => <td className="border border-gray-300 px-3 py-2" {...props} />,
+                            ul: ({...props}) => <ul className="list-disc list-inside my-2 space-y-1" {...props} />,
+                            ol: ({...props}) => <ol className="list-decimal list-inside my-2 space-y-1" {...props} />,
+                            li: ({...props}) => <li className="ml-2" {...props} />,
+                            p: ({...props}) => <p className="mb-2" {...props} />,
+                            code: ({...props}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono" {...props} />,
+                            pre: ({...props}) => <pre className="bg-gray-100 p-3 rounded-lg overflow-x-auto my-3" {...props} />,
+                          }}
+                        >
+                          {removeChartBlocks(m.content)}
+                        </ReactMarkdown>
+                        
+                        {/* Render charts */}
+                        {extractChartData(m.content).map((chartData, index) => (
+                          <ChatVisualization key={index} chartData={chartData} />
+                        ))}
+                      </div>
+                    )}
                     </div>
                   );
                 })}
@@ -463,49 +516,51 @@ export default function ChatDetailPage() {
         )}
 
         {hasStarted && (
-          <form
-            className="sticky bottom-0 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 transition-all duration-700 ease-in-out"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!isSending && !isStreaming) send();
-            }}
-          >
-            <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-2">
-              <textarea
-                ref={hasStarted ? undefined : textareaRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  const el = e.target as HTMLTextAreaElement;
-                  if (!el) return;
-                  adjustTextarea(el);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (!isSending && !isStreaming) send();
-                  }
-                }}
-                placeholder="Ask anything"
-                className="max-h-48 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
-                style={{ height: taHeight }}
-                disabled={isSending || isStreaming}
-                rows={1}
-              />
-              <button
-                type="submit"
-                aria-label="Send message"
-                title="Send"
-                disabled={isSending || isStreaming}
-                className={classNames(
-                  "h-12 w-12 rounded-full text-white flex items-center justify-center",
-                  isSending || isStreaming ? "bg-black/50 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
-                )}
-              >
-                <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
-              </button>
-            </div>
-          </form>
+          <div className="border-t border-gray-200 bg-white p-4">
+            <form
+              className="transition-all duration-700 ease-in-out"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!isSending && !isStreaming) send();
+              }}
+            >
+              <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
+                <textarea
+                  ref={hasStarted ? undefined : textareaRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    const el = e.target as HTMLTextAreaElement;
+                    if (!el) return;
+                    adjustTextarea(el);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!isSending && !isStreaming) send();
+                    }
+                  }}
+                  placeholder="Ask anything"
+                  className="max-h-48 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
+                  style={{ height: taHeight }}
+                  disabled={isSending || isStreaming}
+                  rows={1}
+                />
+                <button
+                  type="submit"
+                  aria-label="Send message"
+                  title="Send"
+                  disabled={isSending || isStreaming}
+                  className={classNames(
+                    "h-12 w-12 rounded-full text-white flex items-center justify-center",
+                    isSending || isStreaming ? "bg-black/50 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
+                  )}
+                >
+                  <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
+                </button>
+              </div>
+            </form>
+          </div>
         )}
       </div>
     </div>
