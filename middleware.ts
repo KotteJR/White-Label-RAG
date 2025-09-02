@@ -10,9 +10,24 @@ export function middleware(request: NextRequest) {
   const authenticated = request.cookies.get("authenticated")?.value === "true";
   const role = (request.cookies.get("role")?.value as "admin" | "user" | undefined) || undefined;
 
+  // Root: always land on chat if authenticated, otherwise login
+  if (path === "/") {
+    const dest = authenticated ? "/chat" : "/login";
+    if (url.pathname !== dest) {
+      const redirectUrl = new URL(dest, url.origin);
+      return NextResponse.redirect(redirectUrl);
+    }
+  }
+
+  // Prevent visiting login/signup when already authenticated
+  if (authenticated && (path === "/login" || path === "/signup")) {
+    const redirectUrl = new URL("/chat", url.origin);
+    return NextResponse.redirect(redirectUrl);
+  }
+
   if (isAdminRoute) {
     if (!authenticated) {
-      const loginUrl = new URL("/profile", url.origin);
+      const loginUrl = new URL("/login", url.origin);
       loginUrl.searchParams.set("redirect", path);
       return NextResponse.redirect(loginUrl);
     }
@@ -26,7 +41,7 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/documents/:path*"],
+  matcher: ["/", "/login", "/signup", "/dashboard/:path*", "/documents/:path*"],
 };
 
 

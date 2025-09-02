@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 import { getDoc, removeDoc, upsertDoc } from "@/lib/docStore";
 import { getServerSupabase } from "@/lib/supabaseServer";
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, ctx: { params: Promise<{ id: string }> | { id: string } }) {
+  const params = 'then' in (ctx.params as any) ? await (ctx.params as Promise<{ id: string }>) : (ctx.params as { id: string });
   const supabase = getServerSupabase();
   if (supabase) {
     const { data, error } = await supabase
