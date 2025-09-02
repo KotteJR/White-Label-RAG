@@ -34,7 +34,7 @@ export default function LoginPage() {
             {/* Title and subtitle */}
             <div className="text-center mb-8">
               <h1 className="text-2xl font-semibold text-gray-900 mb-2">Welcome back</h1>
-              <p className="text-gray-600">Sign in to access your documents<br />and continue your conversations</p>
+              <p className="text-gray-600">Sign in to continue your conversations!</p>
             </div>
 
             {/* Form */}

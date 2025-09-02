@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useUiStore } from "@/store/uiStore";
 import { usePathname } from "next/navigation";
 import classNames from "classnames";
+import { useEffect, useState } from "react";
 
 const NavItem = ({ href, label }: { href: string; label: string }) => {
   const pathname = usePathname();
@@ -25,6 +26,7 @@ const NavItem = ({ href, label }: { href: string; label: string }) => {
 export default function Sidebar() {
   const { role, isAuthenticated, loginAs, logout } = useAuthStore();
   const { sidebarOpen } = useUiStore();
+  const pathname = usePathname();
 
   const adminLinks = [
     { href: "/dashboard", label: "Dashboard" },
@@ -42,9 +44,9 @@ export default function Sidebar() {
         {isAuthenticated && role === "admin" && adminLinks.map((l) => (
           <NavItem key={l.href} href={l.href} label={l.label} />
         ))}
-        {sharedLinks.map((l) => (
-          <NavItem key={l.href} href={l.href} label={l.label} />
-        ))}
+
+        {/* Single Chat link only; history handled inside the chat UI */}
+        <NavItem href="/chat" label="Chat" />
       </nav>
       <div className="mt-6 space-x-2">
         {!isAuthenticated ? (

@@ -2,27 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import classNames from "classnames";
-import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
+import { PaperAirplaneIcon, PlusIcon, EllipsisVerticalIcon } from "@heroicons/react/24/solid";
+import { Menu } from "@headlessui/react";
 import AuthGuard from "@/components/AuthGuard";
-
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  citations?: { id: string; title: string; url?: string }[];
-  feedback?: "up" | "down";
-};
+import { useRouter } from "next/navigation";
 
 function ChatPageContent() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const router = useRouter();
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
-  const [atBottom, setAtBottom] = useState(true);
   const [composerH, setComposerH] = useState(0);
   const [taHeight, setTaHeight] = useState<number>(48);
 
@@ -41,24 +31,7 @@ function ChatPageContent() {
     el.style.overflowY = next >= max ? "auto" : "hidden";
   }
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const el = containerRef.current;
-    const handler = () => {
-      const threshold = 64; // px
-      const isAtBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
-      setAtBottom(isAtBottom);
-    };
-    el.addEventListener("scroll", handler, { passive: true });
-    handler();
-    return () => el.removeEventListener("scroll", handler);
-  }, []);
 
-  useEffect(() => {
-    if (atBottom) {
-      containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: "smooth" });
-    }
-  }, [messages.length, atBottom]);
 
   useEffect(() => {
     const update = () => {
@@ -75,213 +48,211 @@ function ChatPageContent() {
     };
   }, []);
 
-  const send = async () => {
+  const createNewChatAndSend = async () => {
     if (!input.trim()) return;
-    const userMessage: Message = { id: crypto.randomUUID(), role: "user", content: input };
-    setMessages((arr) => [...arr, userMessage]);
+    const userInput = input;
     setInput("");
     setIsSending(true);
-
-    // Call backend to get OpenAI-powered answer with citations
-    const assistantId = crypto.randomUUID();
-    setMessages((arr) => [...arr, { id: assistantId, role: "assistant", content: "", citations: [] }]);
-    setIsStreaming(true);
     try {
-      const res = await fetch("/api/chat/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: userMessage.content }) });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      const text: string = data.content || "";
-      const citations = (data.citations || []) as { id: string; title: string }[];
-      // Simulated progressive render for perceived responsiveness
-      for (let i = 0; i < text.length; i += Math.max(1, Math.floor(text.length / 30))) {
-        await new Promise((r) => setTimeout(r, 16));
-        setMessages((arr) => arr.map((m) => (m.id === assistantId ? { ...m, content: text.slice(0, i + 1) } : m)));
+      // Create chat and redirect with seeded input
+      const chatRes = await fetch("/api/chats", { method: "POST" });
+      const chat = await chatRes.json();
+      if (chat?.id) {
+        router.push(`/chat/${chat.id}?seed=${encodeURIComponent(userInput)}`);
       }
-      setMessages((arr) => arr.map((m) => (m.id === assistantId ? { ...m, content: text, citations } : m)));
     } catch (e) {
-      setMessages((arr) => arr.map((m) => (m.id === assistantId ? { ...m, content: (e as Error).message } : m)));
+      console.error(e);
     } finally {
-      setIsStreaming(false);
       setIsSending(false);
-      if (!hasStarted) setHasStarted(true);
       textareaRef.current?.focus();
     }
   };
 
+  const createNewChat = async () => {
+    try {
+      const chatRes = await fetch("/api/chats", { method: "POST" });
+      const chat = await chatRes.json();
+      if (chat?.id) {
+        router.push(`/chat/${chat.id}`);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const [chatList, setChatList] = useState<{ id: string; title: string | null; created_at: string; updated_at: string }[]>([]);
+
+  // Load chat list on mount
+  useEffect(() => {
+    async function loadChats() {
+      try {
+        const chatsRes = await fetch("/api/chats");
+        const chatsData = await chatsRes.json();
+        setChatList(chatsData.items || []);
+      } catch (e) {
+        console.error("Failed to load chats:", e);
+      }
+    }
+    loadChats();
+  }, []);
+
+  const deleteChat = async (chatIdToDelete: string) => {
+    try {
+      await fetch(`/api/chats/${chatIdToDelete}`, { method: "DELETE" });
+      setChatList(prev => prev.filter(c => c.id !== chatIdToDelete));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const renameChat = async (chatIdToRename: string, newTitle: string) => {
+    try {
+      await fetch(`/api/chats/${chatIdToRename}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      setChatList(prev => prev.map(c => c.id === chatIdToRename ? { ...c, title: newTitle } : c));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
-    <div className="relative flex h-[calc(100vh-80px)] flex-col bg-white text-gray-900">
-      <div
-        ref={containerRef}
-        className={classNames(
-          "flex-1 overflow-y-auto transition-all duration-700 ease-in-out",
-          hasStarted ? "block" : "flex items-center justify-center"
-        )}
-      >
-        <div
-          className={classNames(
-            "mx-auto w-full max-w-3xl px-4",
-            hasStarted ? "pt-4 pb-28" : "grid place-items-center"
-          )}
-          style={hasStarted ? undefined : { minHeight: `calc(100% - ${composerH}px)` }}
-        >
-          {!hasStarted ? (
-            <div className="flex flex-col items-center text-center animate-fadeIn w-full">
-              <div className="mb-3 text-2xl font-medium">What's on the agenda today?</div>
-              <div className="text-sm text-gray-500">Ask anything to get started</div>
-              {/* Inline composer when empty */}
-              <form
-                ref={composerRef}
-                className="mt-6 w-full transition-all duration-700 ease-in-out"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!isSending && !isStreaming) send();
-                }}
+    <div className="relative grid h-[calc(100vh-80px)] grid-cols-[260px_1fr] bg-white text-gray-900">
+      {/* History rail */}
+      <aside className="border-r border-gray-200 p-3 overflow-y-auto">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-sm font-medium text-gray-700">Chats</div>
+          <button
+            onClick={createNewChat}
+            className="inline-flex items-center gap-1 rounded-md bg-gray-900 px-2 py-1 text-xs text-white hover:bg-gray-700"
+          >
+            <PlusIcon className="h-3 w-3" />
+            New
+          </button>
+        </div>
+        <div className="space-y-1">
+          {chatList.map((c) => (
+            <div
+              key={c.id}
+              className="group relative rounded-md hover:bg-gray-50"
+            >
+              <button
+                onClick={() => router.push(`/chat/${c.id}`)}
+                className="w-full text-left px-2 py-2 text-sm"
               >
-                <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-0">
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => {
-                      setInput(e.target.value);
-                      const el = textareaRef.current;
-                      if (!el) return;
-                      adjustTextarea(el);
-                    }}
-                    onFocus={() => {
-                      if (textareaRef.current) adjustTextarea(textareaRef.current);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!isSending && !isStreaming) send();
-                      }
-                    }}
-                    placeholder="Ask anything"
-                    className="max-h-48 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
-                    style={{ height: taHeight }}
-                    disabled={isSending || isStreaming}
-                    rows={1}
-                  />
-                  <button
-                    type="submit"
-                    aria-label="Send message"
-                    title="Send"
-                    disabled={isSending || isStreaming}
-                    className={classNames(
-                      "h-12 w-12 rounded-full text-white flex items-center justify-center",
-                      isSending || isStreaming ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
-                    )}
-                  >
-                    <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
-                  </button>
-                </div>
-              </form>
+                <div className="truncate text-gray-800 pr-6">{c.title || "Untitled chat"}</div>
+                <div className="text-xs text-gray-500">{new Date(c.updated_at || c.created_at).toLocaleString()}</div>
+              </button>
+              
+              {/* 3-dots menu */}
+              <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Menu as="div" className="relative">
+                  <Menu.Button className="p-1 rounded hover:bg-gray-200">
+                    <EllipsisVerticalIcon className="h-4 w-4 text-gray-500" />
+                  </Menu.Button>
+                  <Menu.Items className="absolute right-0 mt-1 w-32 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+                    <Menu.Item>
+                      {({ active }) => (
+                        <button
+                          onClick={() => {
+                            const newTitle = prompt("Enter new title:", c.title || "");
+                            if (newTitle !== null) renameChat(c.id, newTitle);
+                          }}
+                          className={classNames(
+                            "w-full text-left px-3 py-2 text-sm",
+                            active ? "bg-gray-100" : ""
+                          )}
+                        >
+                          Rename
+                        </button>
+                      )}
+                    </Menu.Item>
+                    <Menu.Item>
+                      {({ active }) => (
+                        <button
+                          onClick={() => {
+                            if (confirm("Delete this chat?")) deleteChat(c.id);
+                          }}
+                          className={classNames(
+                            "w-full text-left px-3 py-2 text-sm text-red-600",
+                            active ? "bg-gray-100" : ""
+                          )}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </Menu.Item>
+                  </Menu.Items>
+                </Menu>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-4" role="log" aria-live="polite" aria-relevant="additions">
-              {messages.map((m) => {
-                const isUser = m.role === "user";
-                return (
-                  <div key={m.id} className={classNames("flex", isUser ? "justify-end" : "justify-start")}>
-                    {isUser ? (
-                      <div className="max-w-[70%] rounded-3xl bg-gray-900 px-4 py-2 text-white shadow-sm transition-shadow hover:shadow-md">
-                        {m.content}
-                      </div>
-                    ) : (
-                      <div className="max-w-[70%] leading-relaxed text-gray-800 animate-fadeIn">
-                        {m.content}
-                        {m.citations && m.citations.length > 0 && (
-                          <ol className="mt-2 list-decimal pl-5 text-xs text-gray-600">
-                            {m.citations.map((c) => (
-                              <li key={c.id}>
-                                {c.url ? (
-                                  <a className="underline" href={c.url} target="_blank" rel="noreferrer">
-                                    {c.title}
-                                  </a>
-                                ) : (
-                                  <span>{c.title}</span>
-                                )}
-                              </li>
-                            ))}
-                          </ol>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {isStreaming && (
-                <div className="text-left">
-                  <div className="inline-flex items-center gap-1 text-gray-500">
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.2s]"></span>
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.1s]"></span>
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400"></span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          ))}
+        </div>
+      </aside>
+      
+      {/* Main chat area */}
+      <div className="flex-1 flex items-center justify-center">
+        <div
+          className="mx-auto w-full max-w-3xl px-4 grid place-items-center"
+          style={{ minHeight: `calc(100% - ${composerH}px)` }}
+        >
+          <div className="flex flex-col items-center text-center animate-fadeIn w-full">
+            <div className="mb-3 text-2xl font-medium">What's on the agenda today?</div>
+            <div className="text-sm text-gray-500">Ask anything to get started</div>
+
+            {/* Inline composer when user starts typing */}
+            <form
+              ref={composerRef}
+              className="mt-6 w-full transition-all duration-700 ease-in-out"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!isSending) createNewChatAndSend();
+              }}
+            >
+              <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-0">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    const el = textareaRef.current;
+                    if (!el) return;
+                    adjustTextarea(el);
+                  }}
+                  onFocus={() => {
+                    if (textareaRef.current) adjustTextarea(textareaRef.current);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!isSending) createNewChatAndSend();
+                    }
+                  }}
+                  placeholder="Ask anything"
+                  className="max-h-48 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
+                  style={{ height: taHeight }}
+                  disabled={isSending}
+                  rows={1}
+                />
+                <button
+                  type="submit"
+                  aria-label="Send message"
+                  title="Send"
+                  disabled={isSending}
+                  className={classNames(
+                    "h-12 w-12 rounded-full text-white flex items-center justify-center",
+                    isSending ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
+                  )}
+                >
+                  <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
-
-      {!atBottom && hasStarted && (
-        <button
-          onClick={() => containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: "smooth" })}
-          className="fixed right-6 bottom-28 z-10 rounded-full bg-gray-200 px-3 py-1 text-sm shadow"
-        >
-          Jump to latest
-        </button>
-      )}
-
-      {hasStarted && (
-        <form
-          ref={composerRef}
-          className="sticky bottom-0 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 transition-all duration-700 ease-in-out"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!isSending && !isStreaming) send();
-          }}
-        >
-          <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-2">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                const el = textareaRef.current;
-                if (!el) return;
-                adjustTextarea(el);
-              }}
-              onFocus={() => {
-                if (textareaRef.current) adjustTextarea(textareaRef.current);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (!isSending && !isStreaming) send();
-                }
-              }}
-              placeholder="Ask anything"
-              className="max-h-48 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
-              style={{ height: taHeight }}
-              disabled={isSending || isStreaming}
-              rows={1}
-            />
-            <button
-              type="submit"
-              aria-label="Send message"
-              title="Send"
-              disabled={isSending || isStreaming}
-              className={classNames(
-                "h-12 w-12 rounded-full text-white flex items-center justify-center",
-                isSending || isStreaming ? "bg-black/50 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
-              )}
-            >
-              <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
-            </button>
-          </div>
-        </form>
-      )}
     </div>
   );
 }
