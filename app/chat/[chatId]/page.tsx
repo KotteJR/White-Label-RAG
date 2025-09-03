@@ -304,9 +304,9 @@ export default function ChatDetailPage() {
   };
 
   return (
-    <div className="fixed inset-0 top-20 grid grid-cols-[260px_1fr] bg-white text-gray-900">
+    <div className="h-[calc(100vh-80px)] grid grid-cols-[260px_1fr] bg-white text-gray-900">
       {/* History rail */}
-      <aside className="border-r border-gray-200 p-3 overflow-y-auto">
+      <aside className="border-r border-gray-200 p-3 overflow-y-auto h-full">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-medium text-gray-700">Chats</div>
           <button
@@ -385,7 +385,7 @@ export default function ChatDetailPage() {
       </aside>
       
       {/* Main chat area - right column */}
-      <div className="relative flex flex-col h-full">
+      <div className="relative flex flex-col h-full overflow-hidden">
         <div
           ref={containerRef}
           className={classNames(
@@ -394,7 +394,7 @@ export default function ChatDetailPage() {
           )}
         >
           <div
-            className={classNames("mx-auto w-full max-w-3xl px-4", hasStarted ? "pt-4 pb-4" : "grid place-items-center")}
+            className={classNames("mx-auto w-full max-w-3xl px-4", hasStarted ? "pt-4 pb-24" : "grid place-items-center")}
             style={hasStarted ? undefined : { minHeight: `calc(100% - ${composerH}px)` }}
           >
             {!hasStarted ? (
@@ -462,21 +462,27 @@ export default function ChatDetailPage() {
                           {m.content}
                         </div>
                                           ) : (
-                      <div className="max-w-[70%] leading-relaxed text-gray-800 animate-fadeIn prose prose-sm max-w-none">
+                      <div className="w-full leading-relaxed text-gray-800 animate-fadeIn prose prose-sm prose-gray max-w-none">
                         <ReactMarkdown
                           components={{
-                            h1: ({...props}) => <h1 className="text-xl font-bold mt-4 mb-2" {...props} />,
-                            h2: ({...props}) => <h2 className="text-lg font-bold mt-3 mb-2" {...props} />,
-                            h3: ({...props}) => <h3 className="text-base font-bold mt-2 mb-1" {...props} />,
+                            h1: ({...props}) => <h1 className="text-xl font-bold mt-4 mb-2 text-gray-900" {...props} />,
+                            h2: ({...props}) => <h2 className="text-lg font-bold mt-3 mb-2 text-gray-900" {...props} />,
+                            h3: ({...props}) => <h3 className="text-base font-bold mt-2 mb-1 text-gray-900" {...props} />,
                             strong: ({...props}) => <strong className="font-bold text-gray-900" {...props} />,
-                            table: ({...props}) => <table className="min-w-full border-collapse border border-gray-300 my-3" {...props} />,
-                            th: ({...props}) => <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left font-semibold" {...props} />,
-                            td: ({...props}) => <td className="border border-gray-300 px-3 py-2" {...props} />,
+                            table: ({...props}) => (
+                              <div className="overflow-x-auto my-4">
+                                <table className="min-w-full border-collapse border border-gray-300 text-sm" {...props} />
+                              </div>
+                            ),
+                            thead: ({...props}) => <thead className="bg-gray-100" {...props} />,
+                            th: ({...props}) => <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-900" {...props} />,
+                            td: ({...props}) => <td className="border border-gray-300 px-3 py-2 text-gray-800" {...props} />,
+                            tr: ({...props}) => <tr className="even:bg-gray-50" {...props} />,
                             ul: ({...props}) => <ul className="list-disc list-inside my-2 space-y-1" {...props} />,
                             ol: ({...props}) => <ol className="list-decimal list-inside my-2 space-y-1" {...props} />,
                             li: ({...props}) => <li className="ml-2" {...props} />,
-                            p: ({...props}) => <p className="mb-2" {...props} />,
-                            code: ({...props}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono" {...props} />,
+                            p: ({...props}) => <p className="mb-2 text-gray-800" {...props} />,
+                            code: ({...props}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono text-gray-900" {...props} />,
                             pre: ({...props}) => <pre className="bg-gray-100 p-3 rounded-lg overflow-x-auto my-3" {...props} />,
                           }}
                         >
@@ -516,7 +522,7 @@ export default function ChatDetailPage() {
         )}
 
         {hasStarted && (
-          <div className="border-t border-gray-200 bg-white p-4">
+          <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-4">
             <form
               className="transition-all duration-700 ease-in-out"
               onSubmit={(e) => {
