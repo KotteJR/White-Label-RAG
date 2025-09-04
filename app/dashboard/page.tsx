@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Line } from "react-chartjs-2";
 import AuthGuard from "@/components/AuthGuard";
+import { LoadingState } from "@/components/LoadingSpinner";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -66,7 +67,7 @@ function DashboardPageContent() {
   }, [summary?.trends]);
 
   if (loading) {
-    return <div className="animate-pulse space-y-4">Loading dashboard...</div>;
+    return <LoadingState message="Loading dashboard..." />;
   }
   if (error) {
     return (

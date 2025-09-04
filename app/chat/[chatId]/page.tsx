@@ -6,7 +6,12 @@ import classNames from "classnames";
 import { PaperAirplaneIcon, PlusIcon, EllipsisVerticalIcon } from "@heroicons/react/24/solid";
 import { Menu } from "@headlessui/react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import ChatVisualization from "@/components/ChatVisualization";
+import TableRenderer from "@/components/TableRenderer";
+import ModelSelector from "@/components/ModelSelector";
+import { useModelStore } from "@/store/modelStore";
+import { LoadingDots } from "@/components/LoadingSpinner";
 
 type Message = {
   id: string;
@@ -18,6 +23,7 @@ export default function ChatDetailPage() {
   const { chatId } = useParams<{ chatId: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { selectedModel, setSelectedModel } = useModelStore();
   const [chatList, setChatList] = useState<{ id: string; title: string | null; created_at: string; updated_at: string }[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -52,9 +58,74 @@ export default function ChatDetailPage() {
     return charts;
   }
 
-  // Function to remove chart blocks from content
+  // Function to extract table data from markdown code blocks
+  function extractTableData(content: string) {
+    const tableRegex = /```table\s*\n([\s\S]*?)\n```/g;
+    const tables: { title?: string; headers: string[]; rows: (string | number)[][]; caption?: string }[] = [];
+    let match;
+    
+    while ((match = tableRegex.exec(content)) !== null) {
+      try {
+        const tableData = JSON.parse(match[1]);
+        // Validate table data
+        if (tableData.headers && Array.isArray(tableData.headers) && tableData.rows && Array.isArray(tableData.rows)) {
+          tables.push(tableData);
+        }
+      } catch (e) {
+        console.error("Failed to parse table data:", e);
+      }
+    }
+    
+    return tables;
+  }
+
+  // Fallback: extract pipe-style markdown tables and convert to structured data
+  function extractMarkdownTables(content: string) {
+    const lines = content.split(/\r?\n/);
+    const result: { title?: string; headers: string[]; rows: (string | number)[][]; caption?: string }[] = [];
+    let i = 0;
+
+    const isPipeRow = (line: string) => /\|.*\|/.test(line.trim());
+    const toCells = (line: string) =>
+      line
+        .trim()
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+
+    while (i < lines.length) {
+      if (isPipeRow(lines[i]) && i + 1 < lines.length && /\|?\s*:?[- ]+:?\s*(\|\s*:?[- ]+:?\s*)+\|?/.test(lines[i + 1].trim())) {
+        const headerCells = toCells(lines[i]);
+        i += 2; // skip header and separator
+        const rows: string[][] = [];
+        while (i < lines.length && isPipeRow(lines[i])) {
+          rows.push(toCells(lines[i]));
+          i += 1;
+        }
+        if (headerCells.length > 0 && rows.length > 0) {
+          result.push({ headers: headerCells, rows });
+        }
+      } else {
+        i += 1;
+      }
+    }
+    return result;
+  }
+
+  // Function to remove chart and table blocks from content
   function removeChartBlocks(content: string) {
-    return content.replace(/```chart\s*\n[\s\S]*?\n```/g, '');
+    let cleaned = content
+      .replace(/```chart\s*\n[\s\S]*?\n```/g, '')
+      .replace(/```table\s*\n[\s\S]*?\n```/g, '');
+
+    // Also remove detected pipe-style tables to avoid duplicate rendering
+    cleaned = cleaned.replace(/\n?\s*\|.*\|\s*\n\s*\|\s*[:\- ]+\s*(\|\s*[:\- ]+\s*)+\n([\s\S]*?)(?=\n[^|]|$)/g, (block) => {
+      // Stop removal if block contains code fences, to avoid nuking code samples
+      return block.includes("```") ? block : "\n";
+    });
+    return cleaned;
   }
 
   function adjustTextarea(el: HTMLTextAreaElement) {
@@ -108,17 +179,25 @@ export default function ChatDetailPage() {
   // Load existing messages for this chat
   useEffect(() => {
     async function load() {
-      // load chat list
+      // Load both chat list and messages in parallel for better performance
       try {
-        const chatsRes = await fetch("/api/chats");
-        const chatsData = await chatsRes.json();
+        const [chatsRes, messagesRes] = await Promise.all([
+          fetch("/api/chats"),
+          fetch(`/api/chats/${chatId}/messages`)
+        ]);
+        
+        const [chatsData, messagesData] = await Promise.all([
+          chatsRes.json(),
+          messagesRes.json()
+        ]);
+        
         setChatList(chatsData.items || []);
-      } catch {}
-      const res = await fetch(`/api/chats/${chatId}/messages`);
-      const data = await res.json();
-      const mapped: Message[] = (data.items || []).map((m: { id: string; sender: "user" | "assistant"; content: string }) => ({ id: m.id, role: m.sender, content: m.content }));
-      setMessages(mapped);
-      if (mapped.length > 0) setHasStarted(true);
+        const mapped: Message[] = (messagesData.items || []).map((m: { id: string; sender: "user" | "assistant"; content: string }) => ({ id: m.id, role: m.sender, content: m.content }));
+        setMessages(mapped);
+        if (mapped.length > 0) setHasStarted(true);
+      } catch (error) {
+        console.error("Failed to load chat data:", error);
+      }
     }
     load();
   }, [chatId]);
@@ -147,11 +226,11 @@ export default function ChatDetailPage() {
         setIsStreaming(true);
         
         try {
-          // Call the OpenAI RAG API
+          // Call the chat complete API with selected model
           const response = await fetch("/api/chat/complete", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: seedMessage }),
+            body: JSON.stringify({ message: seedMessage, model: selectedModel }),
           });
           
           if (!response.ok) {
@@ -203,7 +282,7 @@ export default function ChatDetailPage() {
 
       sendSeedMessage();
     }
-  }, [chatId, searchParams, messages.length, hasStarted, isSending]);
+  }, [chatId, searchParams, messages.length, hasStarted, isSending, selectedModel]);
 
   const sendMessage = async (messageContent?: string) => {
     const content = messageContent || input;
@@ -226,11 +305,11 @@ export default function ChatDetailPage() {
     setIsStreaming(true);
     
     try {
-      // Call the OpenAI RAG API
+      // Call the chat complete API with selected model
       const response = await fetch("/api/chat/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content }),
+        body: JSON.stringify({ message: content, model: selectedModel }),
       });
       
       if (!response.ok) {
@@ -402,7 +481,7 @@ export default function ChatDetailPage() {
                 <div className="mb-3 text-2xl font-medium">New chat</div>
                 <div className="text-sm text-gray-500">Ask anything to get started</div>
                 
-                {/* Inline composer when empty */}
+                {/* Composer when empty */}
                 <form
                   ref={composerRef}
                   className="mt-6 w-full transition-all duration-700 ease-in-out"
@@ -411,43 +490,48 @@ export default function ChatDetailPage() {
                     if (!isSending && !isStreaming) send();
                   }}
                 >
-                  <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-0">
-                    <textarea
-                      ref={textareaRef}
-                      value={input}
-                      onChange={(e) => {
-                        setInput(e.target.value);
-                        const el = textareaRef.current;
-                        if (!el) return;
-                        adjustTextarea(el);
-                      }}
-                      onFocus={() => {
-                        if (textareaRef.current) adjustTextarea(textareaRef.current);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          if (!isSending && !isStreaming) send();
-                        }
-                      }}
-                      placeholder="Ask anything"
-                      className="max-h-48 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
-                      style={{ height: taHeight }}
-                      disabled={isSending || isStreaming}
-                      rows={1}
-                    />
-                    <button
-                      type="submit"
-                      aria-label="Send message"
-                      title="Send"
-                      disabled={isSending || isStreaming}
-                      className={classNames(
-                        "h-12 w-12 rounded-full text-white flex items-center justify-center",
-                        isSending || isStreaming ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
-                      )}
-                    >
-                      <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
-                    </button>
+                  <div className="mx-auto w-full max-w-3xl px-0">
+                    <div className="flex items-center gap-3 justify-center">
+                      <textarea
+                        ref={textareaRef}
+                        value={input}
+                        onChange={(e) => {
+                          setInput(e.target.value);
+                          const el = textareaRef.current;
+                          if (!el) return;
+                          adjustTextarea(el);
+                        }}
+                        onFocus={() => {
+                          if (textareaRef.current) adjustTextarea(textareaRef.current);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            if (!isSending && !isStreaming) send();
+                          }
+                        }}
+                        placeholder="Ask anything"
+                        className="max-h-48 w-full max-w-2xl resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
+                        style={{ height: taHeight }}
+                        disabled={isSending || isStreaming}
+                        rows={1}
+                      />
+                      <button
+                        type="submit"
+                        aria-label="Send message"
+                        title="Send"
+                        disabled={isSending || isStreaming}
+                        className={classNames(
+                          "h-12 w-12 rounded-full text-white flex items-center justify-center",
+                          isSending || isStreaming ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
+                        )}
+                      >
+                        <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
+                      </button>
+                    </div>
+                    <div className="mt-2 flex justify-center">
+                      <ModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} variant="below" />
+                    </div>
                   </div>
                 </form>
               </div>
@@ -464,20 +548,21 @@ export default function ChatDetailPage() {
                                           ) : (
                       <div className="w-full leading-relaxed text-gray-800 animate-fadeIn prose prose-sm prose-gray max-w-none">
                         <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
                           components={{
                             h1: ({...props}) => <h1 className="text-xl font-bold mt-4 mb-2 text-gray-900" {...props} />,
                             h2: ({...props}) => <h2 className="text-lg font-bold mt-3 mb-2 text-gray-900" {...props} />,
                             h3: ({...props}) => <h3 className="text-base font-bold mt-2 mb-1 text-gray-900" {...props} />,
                             strong: ({...props}) => <strong className="font-bold text-gray-900" {...props} />,
                             table: ({...props}) => (
-                              <div className="overflow-x-auto my-4">
-                                <table className="min-w-full border-collapse border border-gray-300 text-sm" {...props} />
+                              <div className="overflow-x-auto my-4 rounded-lg border border-gray-200 shadow-sm">
+                                <table className="min-w-full border-collapse text-sm" {...props} />
                               </div>
                             ),
-                            thead: ({...props}) => <thead className="bg-gray-100" {...props} />,
-                            th: ({...props}) => <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-900" {...props} />,
-                            td: ({...props}) => <td className="border border-gray-300 px-3 py-2 text-gray-800" {...props} />,
-                            tr: ({...props}) => <tr className="even:bg-gray-50" {...props} />,
+                            thead: ({...props}) => <thead className="bg-gray-50" {...props} />,
+                            th: ({...props}) => <th className="border-b border-gray-200 bg-gray-50 px-4 py-3 text-left font-semibold text-gray-900 text-sm" {...props} />,
+                            td: ({...props}) => <td className="border-b border-gray-100 px-4 py-3 text-gray-800" {...props} />,
+                            tr: ({...props}) => <tr className="hover:bg-gray-50 transition-colors" {...props} />,
                             ul: ({...props}) => <ul className="list-disc list-inside my-2 space-y-1" {...props} />,
                             ol: ({...props}) => <ol className="list-decimal list-inside my-2 space-y-1" {...props} />,
                             li: ({...props}) => <li className="ml-2" {...props} />,
@@ -493,6 +578,15 @@ export default function ChatDetailPage() {
                         {extractChartData(m.content).map((chartData, index) => (
                           <ChatVisualization key={index} chartData={chartData} />
                         ))}
+                        
+                        {/* Render tables from JSON blocks */}
+                        {extractTableData(m.content).map((tableData, index) => (
+                          <TableRenderer key={`json-${index}`} tableData={tableData} />
+                        ))}
+                        {/* Render tables from pipe-style markdown as fallback */}
+                        {extractMarkdownTables(m.content).map((tableData, index) => (
+                          <TableRenderer key={`md-${index}`} tableData={tableData} />
+                        ))}
                       </div>
                     )}
                     </div>
@@ -500,10 +594,9 @@ export default function ChatDetailPage() {
                 })}
                 {isStreaming && (
                   <div className="text-left">
-                    <div className="inline-flex items-center gap-1 text-gray-500">
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.2s]"></span>
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.1s]"></span>
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400"></span>
+                    <div className="inline-flex items-center gap-2 text-gray-500">
+                      <LoadingDots />
+                      <span className="text-sm">Thinking...</span>
                     </div>
                   </div>
                 )}
@@ -522,7 +615,7 @@ export default function ChatDetailPage() {
         )}
 
         {hasStarted && (
-          <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-4">
+          <div className="absolute bottom-0 left-0 right-0 bg-white p-4">
             <form
               className="transition-all duration-700 ease-in-out"
               onSubmit={(e) => {
@@ -530,7 +623,7 @@ export default function ChatDetailPage() {
                 if (!isSending && !isStreaming) send();
               }}
             >
-              <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
+              <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-0">
                 <textarea
                   ref={hasStarted ? undefined : textareaRef}
                   value={input}
@@ -547,7 +640,7 @@ export default function ChatDetailPage() {
                     }
                   }}
                   placeholder="Ask anything"
-                  className="max-h-48 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
+                  className="max-h-48 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
                   style={{ height: taHeight }}
                   disabled={isSending || isStreaming}
                   rows={1}
@@ -558,11 +651,15 @@ export default function ChatDetailPage() {
                   title="Send"
                   disabled={isSending || isStreaming}
                   className={classNames(
-                    "h-12 w-12 rounded-full text-white flex items-center justify-center",
+                    "h-12 w-12 rounded-full text-white flex items-center justify-center shrink-0",
                     isSending || isStreaming ? "bg-black/50 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
                   )}
                 >
-                  <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
+                  {isSending || isStreaming ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  ) : (
+                    <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
+                  )}
                 </button>
               </div>
             </form>

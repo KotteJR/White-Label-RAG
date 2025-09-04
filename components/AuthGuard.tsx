@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
+import { LoadingState } from "@/components/LoadingSpinner";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -38,27 +39,15 @@ export default function AuthGuard({
   }, [isAuthenticated, role, loading, requireAuth, requireRole, router]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
+    return <LoadingState message="Authenticating..." fullScreen />;
   }
 
   if (requireAuth && !isAuthenticated) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Redirecting to login...</div>
-      </div>
-    );
+    return <LoadingState message="Redirecting to login..." fullScreen />;
   }
 
   if (requireRole && role !== requireRole) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Redirecting...</div>
-      </div>
-    );
+    return <LoadingState message="Redirecting..." fullScreen />;
   }
 
   return <>{children}</>;

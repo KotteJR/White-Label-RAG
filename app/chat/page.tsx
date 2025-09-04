@@ -5,12 +5,15 @@ import classNames from "classnames";
 import { PaperAirplaneIcon, PlusIcon, EllipsisVerticalIcon } from "@heroicons/react/24/solid";
 import { Menu } from "@headlessui/react";
 import AuthGuard from "@/components/AuthGuard";
+import ModelSelector from "@/components/ModelSelector";
+import { useModelStore } from "@/store/modelStore";
 import { useRouter } from "next/navigation";
 
 function ChatPageContent() {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const { selectedModel, setSelectedModel } = useModelStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const [composerH, setComposerH] = useState(0);
@@ -82,18 +85,22 @@ function ChatPageContent() {
 
   const [chatList, setChatList] = useState<{ id: string; title: string | null; created_at: string; updated_at: string }[]>([]);
 
-  // Load chat list on mount
+  // Load chat list on mount with loading state
   useEffect(() => {
+    let isMounted = true;
     async function loadChats() {
       try {
         const chatsRes = await fetch("/api/chats");
         const chatsData = await chatsRes.json();
-        setChatList(chatsData.items || []);
+        if (isMounted) {
+          setChatList(chatsData.items || []);
+        }
       } catch (e) {
         console.error("Failed to load chats:", e);
       }
     }
     loadChats();
+    return () => { isMounted = false; };
   }, []);
 
   const deleteChat = async (chatIdToDelete: string) => {
@@ -211,43 +218,54 @@ function ChatPageContent() {
                 if (!isSending) createNewChatAndSend();
               }}
             >
-              <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-0">
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => {
-                    setInput(e.target.value);
-                    const el = textareaRef.current;
-                    if (!el) return;
-                    adjustTextarea(el);
-                  }}
-                  onFocus={() => {
-                    if (textareaRef.current) adjustTextarea(textareaRef.current);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (!isSending) createNewChatAndSend();
-                    }
-                  }}
-                  placeholder="Ask anything"
-                  className="max-h-48 flex-1 resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
-                  style={{ height: taHeight }}
-                  disabled={isSending}
-                  rows={1}
-                />
-                <button
-                  type="submit"
-                  aria-label="Send message"
-                  title="Send"
-                  disabled={isSending}
-                  className={classNames(
-                    "h-12 w-12 rounded-full text-white flex items-center justify-center",
-                    isSending ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
-                  )}
-                >
-                  <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
-                </button>
+              <div className="mx-auto w-full max-w-3xl px-0">
+                {/* Input row */}
+                <div className="flex items-center gap-3 justify-center">
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      const el = textareaRef.current;
+                      if (!el) return;
+                      adjustTextarea(el);
+                    }}
+                    onFocus={() => {
+                      if (textareaRef.current) adjustTextarea(textareaRef.current);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!isSending) createNewChatAndSend();
+                      }
+                    }}
+                    placeholder="Ask anything"
+                    className="max-h-48 w-full max-w-2xl resize-none rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm leading-5 shadow-sm focus:border-blue-500 focus:outline-none"
+                    style={{ height: taHeight }}
+                    disabled={isSending}
+                    rows={1}
+                  />
+                  <button
+                    type="submit"
+                    aria-label="Send message"
+                    title="Send"
+                    disabled={isSending}
+                    className={classNames(
+                      "h-12 w-12 rounded-full text-white flex items-center justify-center shrink-0",
+                      isSending ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-700"
+                    )}
+                  >
+                    {isSending ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
+                    )}
+                  </button>
+                </div>
+                {/* Below selector with context */}
+                <div className="mt-2 flex justify-center">
+                  <ModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} variant="below" />
+                </div>
               </div>
             </form>
           </div>

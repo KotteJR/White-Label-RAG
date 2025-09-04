@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
+import { LoadingState } from "@/components/LoadingSpinner";
 
 type DocumentItem = {
   id: string;
@@ -95,7 +96,7 @@ function DocumentsPageContent() {
     }
   };
 
-  if (loading) return <div className="animate-pulse">Loading documents...</div>;
+  if (loading) return <LoadingState message="Loading documents..." />;
   if (error)
     return (
       <div className="space-y-2">

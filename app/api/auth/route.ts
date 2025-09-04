@@ -9,11 +9,13 @@ async function setSessionCookie(user: UserRecord | null) {
     store.set("authenticated", "", { path: "/", maxAge: 0 });
     store.set("role", "", { path: "/", maxAge: 0 });
     store.set("email", "", { path: "/", maxAge: 0 });
+    store.set("user_id", "", { path: "/", maxAge: 0 });
     return;
   }
   store.set("authenticated", "true", { path: "/" });
   store.set("role", user.role, { path: "/" });
   store.set("email", encodeURIComponent(user.email), { path: "/" });
+  store.set("user_id", user.id, { path: "/" });
 }
 
 export async function POST(request: Request) {
@@ -49,8 +51,9 @@ export async function GET() {
   const authenticated = store.get("authenticated")?.value === "true";
   const role = (store.get("role")?.value as "admin" | "user" | undefined) || null;
   const email = store.get("email")?.value ? decodeURIComponent(store.get("email")!.value) : null;
-  if (!authenticated || !role || !email) return Response.json({ isAuthenticated: false });
-  return Response.json({ isAuthenticated: true, email, role });
+  const userId = store.get("user_id")?.value || null;
+  if (!authenticated || !role || !email || !userId) return Response.json({ isAuthenticated: false });
+  return Response.json({ isAuthenticated: true, email, role, id: userId });
 }
 
 
