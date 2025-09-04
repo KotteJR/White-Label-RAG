@@ -277,7 +277,7 @@ function ChatPageContent() {
 
 export default function ChatPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAuth={false}>
       <ChatPageContent />
     </AuthGuard>
   );

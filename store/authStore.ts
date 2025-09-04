@@ -29,11 +29,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     fetch("/api/auth")
       .then((r) => r.json())
       .then((data) => {
-        if (data.isAuthenticated) {
-          set({ isAuthenticated: true, email: data.email, role: data.role, loading: false, error: null });
-        } else {
-          set({ isAuthenticated: false, email: null, role: null, loading: false });
-        }
+        set({ isAuthenticated: !!data.isAuthenticated, email: data.email || null, role: (data.role as any) || null, loading: false, error: null });
       })
       .catch((e) => set({ isAuthenticated: false, email: null, role: null, loading: false, error: (e as Error).message }));
   },
