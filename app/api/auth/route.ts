@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 type UserRecord = { id: string; email: string; username: string; role: "admin" | "user"; password: string };
-const memoryDb: { users: UserRecord[] } = { users: [{ id: "1", email: "admin@example.com", username: "admin", role: "admin", password: "admin" }] };
+const memoryDb: { users: UserRecord[] } = { users: [{ id: "00000000-0000-0000-0000-000000000001", email: "admin@example.com", username: "admin", role: "admin", password: "admin" }] };
 
 async function setSessionCookie(user: UserRecord | null) {
   const store = await cookies();
